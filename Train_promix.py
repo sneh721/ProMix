@@ -17,7 +17,7 @@ from sklearn.mixture import GaussianMixture
 from datetime import datetime
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
-parser.add_argument('--batch_size', default=256, type=int, help='train batchsize')
+parser.add_argument('--batch_size', default=16, type=int, help='train batchsize')                      # batch size was 256
 parser.add_argument('--lr', '--learning_rate', default=0.05, type=float, help='initial learning rate')
 parser.add_argument('-lr_decay_rate', type=float, default=0.1, help='decay rate for learning rate')
 parser.add_argument('--cosine', action='store_true', default=False,
@@ -27,12 +27,12 @@ parser.add_argument('--noise_type', type=str, help='clean, aggre, worst, rand1, 
 parser.add_argument('--noise_path', type=str, help='path of CIFAR-10_human.pt', default=None)
 parser.add_argument('--p_threshold', default=0.5, type=float, help='clean probability threshold')
 parser.add_argument('--T', default=0.5, type=float, help='sharpening temperature')
-parser.add_argument('--num_epochs', default=600, type=int)
+parser.add_argument('--num_epochs', default=1, type=int)                                               # epochs was 600
 parser.add_argument('--seed', default=123)
 parser.add_argument('--gpuid', default=0, type=int)
-parser.add_argument('--num_class', default=100, type=int)
+parser.add_argument('--num_class', default=2, type=int)                                                # num classes
 parser.add_argument('--data_path', default=None, type=str, help='path to dataset')
-parser.add_argument('--dataset', default='cifar10', type=str)
+parser.add_argument('--dataset', default='custom', type=str)
 parser.add_argument('--is_human', action='store_true', default=False)
 parser.add_argument('--rho_range', default='0.2,0.6', type=str,
                     help='ratio of selecting clean labels (rho)')
@@ -48,7 +48,7 @@ parser.add_argument('--debias_output', default=0.8, type=float,
                     help='debias strength for loss calculation')
 parser.add_argument('--debias_pl', default=0.8, type=float,
                     help='debias strength for pseudo-label generation')
-parser.add_argument('--noise_mode', default='cifarn', type=str,help='cifarn, sym, asym')
+parser.add_argument('--noise_mode', default='sym', type=str,help='cifarn, sym, asym')                 # noise mode was cifarn
 parser.add_argument('--noise_rate', default=0.2, type=float,
                     help='noise rate for synthetic noise')
 parser.add_argument('--bias_m', default=0.9999, type=float,
@@ -57,10 +57,18 @@ args = parser.parse_args()
 [args.rho_start, args.rho_end] = [float(item) for item in args.rho_range.split(',')]
 print(args)
 
-torch.cuda.set_device(args.gpuid)
+
+if torch.cuda.is_available():
+    DEVICE = 'cuda'
+    torch.cuda.set_device(args.gpuid)
+    torch.cuda.manual_seed_all(args.seed)
+
+else:
+    DEVICE = 'cpu'
+
 random.seed(args.seed)
 torch.manual_seed(args.seed)
-torch.cuda.manual_seed_all(args.seed)
+
 
 # Hyper Parameters
 noise_type_map = {'clean': 'clean_label', 'worst': 'worse_label', 'aggre': 'aggre_label', 'rand1': 'random_label1',
@@ -70,13 +78,10 @@ args.noise_type = noise_type_map[args.noise_type]
 # load dataset
 # please change it to your own datapath
 if args.data_path is None:
-    if args.dataset == 'cifar10':
-        args.data_path = './data/cifar-10'
-    elif args.dataset == 'cifar100':
-        args.data_path = './data/cifar-100'
-    else:
-        pass
+    args.data_path = './Images'
+
 # please change it to your own datapath for CIFAR-N
+# NOTE: Do now have a noise path, but there is an inject noise option in the dataloader so should be fine
 if args.noise_path is None:
     if args.dataset == 'cifar10':
         args.noise_path = './data/CIFAR-10_human.pt'

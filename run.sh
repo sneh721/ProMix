@@ -20,3 +20,8 @@ python Train_promix.py --noise_type worst --cosine --dataset cifar10 --num_class
 # For CIFAR-100N
 python Train_promix.py --noise_type noisy100 --cosine --dataset cifar100 --num_class 100 --rho_range 0.5,0.5 --tau 0.95 --pretrain_ep 30 --debias_output 0.5 --debias_pl 0.5 --noise_mode cifarn
 
+
+
+
+# CUSTOM
+python Train_promix.py --cosine --dataset custom --num_class 2 --rho_range 0.7,0.7 --tau 0.99 --pretrain_ep 10 --debias_output 0.8 --debias_pl 0.8  --noise_mode sym --noise_rate 0.2
