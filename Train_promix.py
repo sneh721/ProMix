@@ -135,7 +135,7 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
 
         # inputs_x: weak augmentation
         # inputs_x2: strong augmentation
-        inputs_x, inputs_x2, labels_x, w_x , w_x2= inputs_x.cuda(), inputs_x2.cuda(), labels_x.cuda(), w_x.cuda(), w_x2.cuda()
+        inputs_x, inputs_x2, labels_x, w_x , w_x2= inputs_x.to(DEVICE), inputs_x2.to(DEVICE), labels_x.to(DEVICE), w_x.to(DEVICE), w_x2.to(DEVICE)
         outputs_x, outputs_x_ph, _ = net(inputs_x,train=True,use_ph=True)
         outputs_x2, outputs_x2_ph, _ = net(inputs_x2,train=True,use_ph=True)
         outputs_a, outputs_a_ph, _ = net2(inputs_x,train=True,use_ph=True)
@@ -345,8 +345,9 @@ def warmup(epoch, net, net2, optimizer, dataloader):
     net.train()
     net2.train()
     num_iter = (len(dataloader.dataset) // dataloader.batch_size) + 1
+
     for batch_idx, (inputs_w, inputs_s, labels, _) in enumerate(dataloader):
-        inputs_w, inputs_s, labels = inputs_w.cuda(), inputs_s.cuda(), labels.cuda()
+        inputs_w, inputs_s, labels = inputs_w.to(DEVICE), inputs_s.to(DEVICE), labels.to(DEVICE)
         optimizer.zero_grad()
         outputs = net(inputs_w)
         outputs2 = net2(inputs_w)
@@ -372,7 +373,7 @@ def evaluate(loader, model, save = False, best_acc = 0.0):
     correct = 0
     total = 0
     for batch_idx, (images, labels) in enumerate(loader):
-        images = torch.autograd.Variable(images).cuda()
+        images = torch.autograd.Variable(images).to(DEVICE)
         logits = model(images)
         outputs = F.softmax(logits, dim=1)
         _, pred = torch.max(outputs.data, 1)
@@ -401,7 +402,7 @@ def test(epoch, net1, net2):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(test_loader):
-            inputs, targets = inputs.cuda(), targets.cuda()
+            inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
             outputs1_ori,outputs1 = net1(inputs,use_ph=True)
             outputs2_ori,outputs2 = net2(inputs,use_ph=True)
             score1, predicted = torch.max(outputs1, 1)
@@ -430,7 +431,7 @@ def eval_train(model, all_loss, rho, num_class):
     num_class = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets, index) in enumerate(eval_loader):
-            inputs, targets = inputs.cuda(), targets.cuda()
+            inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
             outputs = model(inputs)
             num_class = outputs.shape[1]
             loss = CE(outputs, targets)
@@ -468,7 +469,7 @@ class NegEntropy(object):
 
 def create_model():
     model = DualNet(args.num_class)
-    model = model.cuda()
+    model = model.to(DEVICE)
     return model
 
 
@@ -488,9 +489,11 @@ dualnet = create_model()
 cudnn.benchmark = True
 
 conf_penalty = NegEntropy()
-optimizer1 = optim.SGD([{'params': dualnet.net1.parameters()},
-                        {'params': dualnet.net2.parameters()}
-                        ], lr=args.lr, momentum=0.9, weight_decay=5e-4)
+# optimizer1 = optim.SGD([{'params': dualnet.net1.parameters()},
+#                         {'params': dualnet.net2.parameters()}
+#                         ], lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer1 = torch.optim.Adam([{'params': dualnet.net1.parameters()},
+                        {'params': dualnet.net2.parameters()}], lr=args.lr, weight_decay=5e-4)
 
 fmix = FMix()
 CE = nn.CrossEntropyLoss(reduction='none')

@@ -3,7 +3,7 @@
 /data/__pycache__
 /data/cifar-100-python
 /data/cifar-10-batches-py
-/checkpoint/*.txt
+/checkpoint/
 /__pycache__
 /cifar-10
 /cifar-100
@@ -12,3 +12,6 @@
 *best.pth.tar
 *.log
 *.log
+/promix_env/
+/Images/
+/utils/__pycache__/

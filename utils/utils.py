@@ -17,7 +17,7 @@ def debias_output(logit, bias, tau=0.8):
     return debiased_opt
 
 def bias_initial(num_class=10):
-    bias = (torch.ones(num_class, dtype=torch.float)/num_class).cuda()
+    bias = (torch.ones(num_class, dtype=torch.float)/num_class).to(set_device())
     return bias
 
 def bias_update(input, bias, momentum, bias_mask=None):
@@ -49,7 +49,7 @@ class CE_Soft_Label(nn.Module):
         self.confidence = None
 
     def init_confidence(self, noisy_labels, num_class):
-        noisy_labels = torch.Tensor(noisy_labels).long().cuda()
+        noisy_labels = torch.Tensor(noisy_labels).long().to(set_device())
         self.confidence = F.one_hot(noisy_labels, num_class).float().clone().detach()
 
     def forward(self, outputs, targets=None):
@@ -63,7 +63,7 @@ class CE_Soft_Label(nn.Module):
     def confidence_update(self, temp_un_conf, batch_index, conf_ema_m):
         with torch.no_grad():
             _, prot_pred = temp_un_conf.max(dim=1)
-            pseudo_label = F.one_hot(prot_pred, temp_un_conf.shape[1]).float().cuda().detach()
+            pseudo_label = F.one_hot(prot_pred, temp_un_conf.shape[1]).float().to(set_device()).detach()
             self.confidence[batch_index, :] = conf_ema_m * self.confidence[batch_index, :]\
                  + (1 - conf_ema_m) * pseudo_label
         return None

@@ -2,9 +2,9 @@ numpy
 scikit-image
 scikit-learn
 scipy
-torch
-torchaudio
+torch==2.2.2
+torchaudio==2.2.2
 torchfile
 torchnet
-torchvision
+torchvision==0.17.2
 Pillow

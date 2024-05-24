@@ -3,19 +3,14 @@ import torch
 import copy
 import random
 import json
-from data.utils import download_url, check_integrity
 from utils.randaug import *
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import numpy as np
 from PIL import Image
 from torchvision import datasets
+import matplotlib.pyplot as plt
 
-# def unpickle(file):
-#     import _pickle as cPickle
-#     with open(file, 'rb') as fo:
-#         dict = cPickle.load(fo, encoding='latin1')
-#     return dict
 
 class cifarn_dataset(Dataset):
     def __init__(self,  dataset,  noise_type, noise_path, root_dir, transform, mode, transform_s=None, is_human=False, noise_file='',
@@ -38,18 +33,22 @@ class cifarn_dataset(Dataset):
         idx_each_class_noisy = [[] for i in range(self.nb_classes)]
 
         if self.mode == 'test':
-            test_dataset = datasets.ImageFolder(root='Images/test', transform=self.transform)
+            test_dataset = datasets.ImageFolder(root='Images/valid', transform=self.transform)
             self.test_data = []
-            self.test_labels = []
+            self.test_label = []
             for img, label in test_dataset:
-                self.test_data.append(img.numpy())  # Convert the image tensor to a numpy array
-                self.test_labels.append(label)
-        else:   # Train mode
+                img = (img.numpy() * 255).astype(np.uint8)   # Convert 0 to 1 pixels to 0 to 255
+                img = np.transpose(img, (1, 2, 0))          # (H, W, C)
+                self.test_data.append(img)  # Convert the image tensor to a numpy array
+                self.test_label.append(label)
+        else:   # Train or warmup mode
             train_dataset = datasets.ImageFolder(root='Images/train', transform=self.transform)
             train_data = []
             train_label = []
             for img, label in train_dataset:
-                train_data.append(img.numpy())  # Convert the image tensor to a numpy array
+                img = (img.numpy() * 255).astype(np.uint8)    # Convert 0 to 1 pixels to 0 to 255
+                img = np.transpose(img, (1, 2, 0))
+                train_data.append(img)  # Convert the image tensor to a numpy array
                 train_label.append(label)
             self.train_label = train_label
 
@@ -66,7 +65,7 @@ class cifarn_dataset(Dataset):
                 if self.noise_mode=='sym' or self.noise_mode =='asym':
                     noise_label = []
                     n = len(train_dataset)
-                    idx = list(range(train_dataset))
+                    idx = list(range(n))
                     random.shuffle(idx)
                     num_noise = int(self.r * n)            
                     noise_idx = idx[:num_noise]
@@ -75,7 +74,7 @@ class cifarn_dataset(Dataset):
                             if self.noise_mode=='sym':
                                 noiselabel = random.randint(self.nb_classes)
                                 noise_label.append(noiselabel)
-                            elif self.noise_mode=='asym':   
+                            elif self.noise_mode=='asym':
                                 noiselabel = self.transition[self.train_label[i]]
                                 noise_label.append(noiselabel)                    
                         else:    
@@ -105,7 +104,7 @@ class cifarn_dataset(Dataset):
                     log.write('Numer of labeled samples:%d   AUC (not computed):%.3f\n' % (pred.sum(), 0))
                     log.flush()
 
-                elif self.mode == "unlabeled":        # Unlabeled data???
+                elif self.mode == "unlabeled":        # Unlabeled data -- just model predictions
                     pred_idx = (1 - pred).nonzero()[0]
 
                 self.train_data = train_data[pred_idx]
@@ -153,7 +152,7 @@ class cifarn_dataset(Dataset):
             img2 = self.transform_s(img)
             return img1, img2, target, prob,prob2,true_labels, index
         elif self.mode == 'all':
-            img, target = self.train_data[index], self.noise_label[index]
+            img, target = self.train_data[index], self.noise_label[index]   # img => numpy array, target => int
             img = Image.fromarray(img)
             if self.transform_s is not None:
                 img1 = self.transform(img)
@@ -180,10 +179,16 @@ class cifarn_dataset(Dataset):
         else:
             return len(self.test_data)
 
+class RandomAugmentToTensor(transforms.Compose):
+    def __call__(self, img):
+        img = super().__call__(img)  # Apply all transformations except ToTensor
+        # Convert PIL image to tensor
+        img_tensor = torch.tensor(np.array(img)).permute(2, 0, 1).float() / 255.0
+        return img_tensor
 
 class cifarn_dataloader():
     def __init__(self, dataset, noise_type, noise_path, is_human, batch_size, num_workers, root_dir, log,
-                 noise_file='',noise_mode='cifarn', r=0.2):
+                 noise_file='',noise_mode='custom', r=0.2):
         self.r = r
         self.noise_mode = noise_mode
         self.dataset = dataset
@@ -197,15 +202,14 @@ class cifarn_dataloader():
         self.noise_file = noise_file
         if self.dataset == 'custom':
             self.transform_train = transforms.Compose([
+                                        transforms.CenterCrop((240, 300)),           # Hardcoded because I cropped the images
                                         transforms.RandomHorizontalFlip(),
-                                        transforms.RandomCrop(32, padding=4),
-                                        transforms.ToTensor(), 
-                                        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])   # NOTE: Mean and std for the three channels -- should be specific to the dataset used
+                                        transforms.ToTensor()])
             self.transform_train_s = copy.deepcopy(self.transform_train)
-            self.transform_train_s.transforms.insert(0, RandomAugment(3,5))
+            self.transform_train_s.transforms.insert(1, RandomAugment(3,5))
             self.transform_test = transforms.Compose([
+                transforms.CenterCrop((240, 300)),
                 transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
             ])
         self.print_show = True
 
@@ -214,7 +218,7 @@ class cifarn_dataloader():
             all_dataset = cifarn_dataset(dataset=self.dataset, noise_type=self.noise_type, noise_path=self.noise_path,
                                          is_human=self.is_human, root_dir=self.root_dir, transform=self.transform_train,
                                          transform_s=self.transform_train_s, mode="all",
-                                         noise_file=self.noise_file, print_show=self.print_show, r=self.r,noise_mode=self.noise_mode)
+                                         noise_file=self.noise_file, print_show=self.print_show, r=self.r,noise_mode=self.noise_mode)                      
             trainloader = DataLoader(
                 dataset=all_dataset,
                 batch_size=self.batch_size,

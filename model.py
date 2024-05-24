@@ -5,21 +5,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
+from timm import create_model
 
 
 class DualNet(nn.Module):
     def __init__(self, num_class):
         super().__init__()
-        self.net1 = ResNet18(num_classes=num_class)
-        self.net2 = ResNet18(num_classes=num_class)
+        # TODO: Take model_name as an argument from run.sh
+        self.net1 = create_model(model_name='convnext_nano', pretrained=True, num_classes=num_class)
+        self.net2 = create_model(model_name='convnext_nano', pretrained=True, num_classes=num_class)
 
     def forward(self,x):
+        # TODO: potentially freeze backbone
         outputs_1 = self.net1(x)
         outputs_2 = self.net2(x)
         outputs_mean = (outputs_1 + outputs_2)/2
         return outputs_mean
 
 
+#########################################
 class BasicBlock(nn.Module):
     expansion = 1
 
