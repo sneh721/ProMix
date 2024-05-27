@@ -24,6 +24,5 @@
 
 
 # CUSTOM
-python Train_promix.py --cosine --dataset custom --num_class 2 --rho_range 0.7,0.7 --tau 0.99 --pretrain_ep 10 --debias_output 0.8 --debias_pl 0.8  --noise_mode sym --noise_rate 0.2
-
+python Train_promix.py --noise_type worst --cosine --dataset custom --num_class 2 --rho_range 0.5,0.5 --tau 0.99 --pretrain_ep 10 --noise_mode custom
 # Try pretrain epochs 0

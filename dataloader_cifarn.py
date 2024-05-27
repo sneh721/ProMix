@@ -52,6 +52,9 @@ class cifarn_dataset(Dataset):
                 train_label.append(label)
             self.train_label = train_label
 
+            # NOTE: the code below seems to be for testing: basically either you already know the noise labels
+            # OR the data is clean and we inject noise
+            # In real life case: the train labels are noisy already and we don't know the noise pattern
             # if noise_type is not None:
             if os.path.exists(noise_file):           # Seems like the noise file has the noisy label: 
                 noise_label = json.load(open(noise_file,"r"))
@@ -83,6 +86,19 @@ class cifarn_dataset(Dataset):
                     self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_label)
                     print("save noisy labels to %s ..."%noise_file)        
                     json.dump(noise_label,open(noise_file,"w"))
+                elif self.noise_mode == 'custom':                     # Branch for data already is noisy
+                    if noise_type != 'clean':
+                        self.train_noisy_labels = self.train_label
+                    
+                        for i in range(len(self.train_noisy_labels)):
+                            idx_each_class_noisy[self.train_noisy_labels[i]].append(i)
+                        class_size_noisy = [len(idx_each_class_noisy[i]) for i in range(self.nb_classes)]
+                        self.noise_prior = np.array(class_size_noisy) / sum(class_size_noisy)
+                        self.print_wrapper(f'The noisy data ratio in each class is {self.noise_prior}')
+                        self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_labels)
+                        self.actual_noise_rate = np.sum(self.noise_or_not) / len(self.noise_or_not)
+                        self.print_wrapper('over all noise rate is ', self.actual_noise_rate)
+                    noise_label = self.train_noisy_labels
                 
             
             if self.mode == 'all_lab':   # fully labeled data with probability information
