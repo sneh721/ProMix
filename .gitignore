@@ -15,3 +15,5 @@
 /promix_env/
 /Images/
 /utils/__pycache__/
+/cifar100png/
+cifar-100*
