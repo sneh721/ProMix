@@ -12,11 +12,16 @@ from torchvision import datasets
 import matplotlib.pyplot as plt
 
 # Hardcoded: Num classes, crop image size
+CROP_H = 32
+CROP_W = 32
+NUM_CLASSES = 100
+
 class cifarn_dataset(Dataset):
-    def __init__(self,  dataset,  noise_type, noise_path, root_dir, transform, mode, is_human=False, noise_file='',
+    def __init__(self,  dataset,  noise_type, noise_path, root_dir, transform, mode, transform_s = None, is_human=False, noise_file='',
                  pred=[], probability=[],probability2=[] ,log='', print_show=False, r =0.2 , noise_mode = 'sym'):
         self.dataset = dataset
         self.transform = transform
+        self.transform_s = transform_s
         self.mode = mode
         self.noise_type = noise_type
         self.noise_path = noise_path
@@ -24,13 +29,13 @@ class cifarn_dataset(Dataset):
         self.noise_mode = noise_mode
         self.r = r
             
-        self.nb_classes = 100
+        self.nb_classes = NUM_CLASSES
         
         # New simplified code for our purpose
         idx_each_class_noisy = [[] for i in range(self.nb_classes)]
         
         if self.mode == 'test':
-            self.test_dataset = datasets.ImageFolder(root='cifar100png/test', transform=self.transform)
+            self.test_dataset = datasets.ImageFolder(root='cifar100png/test')
             # test_dataset = datasets.ImageFolder(root='Images/valid', transform=self.transform)
             self.test_label = []
             for _, label in self.test_dataset:
@@ -40,7 +45,7 @@ class cifarn_dataset(Dataset):
             # With transform -- since we do toTensor(), returns images with each pixel 0 to 1
             # It is easier to do this way to easily get labels and also do the same things in test
             # train_dataset = datasets.ImageFolder(root='Images/train', transform=self.transform)
-            self.train_dataset = datasets.ImageFolder(root='cifar100png/train', transform=self.transform)
+            self.train_dataset = datasets.ImageFolder(root='cifar100png/train')
             self.train_label = []
             for _, label in self.train_dataset:
                 self.train_label.append(label)
@@ -87,6 +92,48 @@ class cifarn_dataset(Dataset):
     def print_wrapper(self, *args, **kwargs):
         if self.print_show:
             print(*args, **kwargs)
+            
+    def __getitem__(self, index):
+        if self.mode == 'labeled':
+            img, target, prob = self.train_dataset[index][0], self.noise_label[index], self.probability[index]
+            img1 = self.transform(img)
+            img2 = self.transform_s(img)
+            return img1, img2, target, prob
+        elif self.mode == 'unlabeled':
+            img = self.train_dataset[index][0]
+            img1 = self.transform(img)
+            img2 = self.transform_s(img)
+            return img1, img2
+        elif self.mode == 'all_lab':
+            img, target, prob, prob2 = self.train_dataset[index][0], self.noise_label[index], self.probability[index],self.probability2[index]
+            true_labels = self.train_labels[index]
+            img1 = self.transform(img)
+            img2 = self.transform_s(img)
+            return img1, img2, target, prob,prob2,true_labels, index
+        elif self.mode == 'all':
+            img, target = self.train_dataset[index][0], self.noise_label[index]   # img => numpy array, target => int
+            if self.transform_s is not None:
+                img1 = self.transform(img)
+                img2 = self.transform_s(img)
+                return img1, img2, target, index
+            else:
+                img = self.transform(img)
+                return img, target, index
+        elif self.mode == 'all2':     # What is all vs all2????
+            img, target = self.train_dataset[index][0], self.noise_label[index]
+            img1 = self.transform(img)
+            img2 = self.transform_s(img)
+            return img1, img2, target, index
+        elif self.mode == 'test':
+            img, target = self.test_dataset[index][0], self.test_label[index]
+            img = self.transform(img)
+            return img, target
+        
+    def __len__(self):
+        if self.mode != 'test':
+            return len(self.train_dataset)
+        else:
+            return len(self.test_dataset)
 
 class RandomAugmentToTensor(transforms.Compose):
     def __call__(self, img):
@@ -111,13 +158,16 @@ class cifarn_dataloader():
         self.noise_file = noise_file
         if self.dataset == 'custom':
             self.transform_train = transforms.Compose([
-                                        transforms.CenterCrop((32, 32)), # Hardcoded because I cropped the images
+                                        transforms.CenterCrop((CROP_H, CROP_W)),
+                                        transforms.RandomHorizontalFlip(),
+                                        transforms.ToTensor()])
+            self.transform_train_s = transforms.Compose([
+                                        transforms.CenterCrop((CROP_H, CROP_W)), 
                                         RandomAugment(3,5),
                                         transforms.RandomHorizontalFlip(),
                                         transforms.ToTensor()])
-            
             self.transform_test = transforms.Compose([
-                transforms.CenterCrop((32, 32)),
+                transforms.CenterCrop((CROP_H, CROP_W)),
                 transforms.ToTensor(),
             ])
         self.print_show = True
@@ -126,28 +176,26 @@ class cifarn_dataloader():
         if mode == 'warmup':
             all_dataset = cifarn_dataset(dataset=self.dataset, noise_type=self.noise_type, noise_path=self.noise_path,
                                          is_human=self.is_human, root_dir=self.root_dir, transform=self.transform_train,
-                                         mode="all",
+                                         transform_s=self.transform_train_s, mode="all",
                                          noise_file=self.noise_file, print_show=self.print_show, r=self.r,noise_mode=self.noise_mode)                      
             trainloader = DataLoader(
-                dataset=all_dataset.train_dataset,
+                dataset=all_dataset,
                 batch_size=self.batch_size,
                 shuffle=True,
                 num_workers=self.num_workers)
             self.print_show = False
-            for item in trainloader:
-                print(item)
-                break
             # never show noisy rate again
             return trainloader, all_dataset.train_noisy_labels
 
         elif mode == 'train':
             labeled_dataset = cifarn_dataset(dataset=self.dataset, noise_type=self.noise_type,
                                              noise_path=self.noise_path, is_human=self.is_human,
-                                             root_dir=self.root_dir, transform=self.transform_train, mode="all_lab",
+                                             root_dir=self.root_dir, transform=self.transform_train, transform_s=self.transform_train_s,
+                                             mode="all_lab",
                                              noise_file=self.noise_file, pred=pred, probability=prob,probability2=prob2, log=self.log,
                                              r=self.r,noise_mode=self.noise_mode)
             labeled_trainloader = DataLoader(
-                dataset=labeled_dataset.train_dataset,
+                dataset=labeled_dataset,
                 batch_size=self.batch_size,
                 shuffle=True,
                 num_workers=self.num_workers,
@@ -161,7 +209,7 @@ class cifarn_dataloader():
                                           is_human=self.is_human,
                                           root_dir=self.root_dir, transform=self.transform_test, mode='test', r=self.r,noise_mode=self.noise_mode)
             test_loader = DataLoader(
-                dataset=test_dataset.test_dataset,
+                dataset=test_dataset,
                 batch_size=self.batch_size,
                 shuffle=False,
                 num_workers=self.num_workers)
@@ -173,7 +221,7 @@ class cifarn_dataloader():
                                           root_dir=self.root_dir, transform=self.transform_test, mode='all',
                                           noise_file=self.noise_file, r=self.r,noise_mode=self.noise_mode)
             eval_loader = DataLoader(
-                dataset=eval_dataset.train_dataset,
+                dataset=eval_dataset,
                 batch_size=self.batch_size,
                 shuffle=False,
                 num_workers=self.num_workers)
