@@ -42,6 +42,9 @@ class cifarn_dataset(Dataset):
                 self.test_data.append(img)  # Convert the image tensor to a numpy array
                 self.test_label.append(label)
         else:   # Train or warmup mode
+            # Without any transformation, ImageFolder returns a Image type (RGB)
+            # With transform -- since we do toTensor(), returns images with each pixel 0 to 1
+            # It is easier to do this way to easily get labels and also do the same things in test
             train_dataset = datasets.ImageFolder(root='Images/train', transform=self.transform)
             train_data = []
             train_label = []
@@ -95,7 +98,7 @@ class cifarn_dataset(Dataset):
                         class_size_noisy = [len(idx_each_class_noisy[i]) for i in range(self.nb_classes)]
                         self.noise_prior = np.array(class_size_noisy) / sum(class_size_noisy)
                         self.print_wrapper(f'The noisy data ratio in each class is {self.noise_prior}')
-                        self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_labels)
+                        self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_label)
                         self.actual_noise_rate = np.sum(self.noise_or_not) / len(self.noise_or_not)
                         self.print_wrapper('over all noise rate is ', self.actual_noise_rate)
                     noise_label = self.train_noisy_labels

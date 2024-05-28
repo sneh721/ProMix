@@ -505,7 +505,7 @@ test_loader = loader.run('test')
 all_loss = [[], []]  
 
 best_acc = 0
-#uniform initialization of distribution estimation
+# uniform initialization of distribution estimation
 pi1 = bias_initial(args.num_class)
 pi2 = bias_initial(args.num_class)
 pi1_unrel = bias_initial(args.num_class)
