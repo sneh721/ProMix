@@ -17,6 +17,8 @@ from sklearn.mixture import GaussianMixture
 from datetime import datetime
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
+parser.add_argument('--validation', action='store_true', default=False)
+parser.add_argument('--model_name', default=None, type=str)
 parser.add_argument('--batch_size', default=16, type=int, help='train batchsize')                      # batch size was 256
 parser.add_argument('--lr', '--learning_rate', default=0.05, type=float, help='initial learning rate')
 parser.add_argument('-lr_decay_rate', type=float, default=0.1, help='decay rate for learning rate')
@@ -27,7 +29,7 @@ parser.add_argument('--noise_type', type=str, help='clean, aggre, worst, rand1, 
 parser.add_argument('--noise_path', type=str, help='path of CIFAR-10_human.pt', default=None)
 parser.add_argument('--p_threshold', default=0.5, type=float, help='clean probability threshold')
 parser.add_argument('--T', default=0.5, type=float, help='sharpening temperature')
-parser.add_argument('--num_epochs', default=1, type=int)                                               # epochs was 600
+parser.add_argument('--num_epochs', default=1, type=int)                                               # Total number of epochs for main training phase: Was 600
 parser.add_argument('--seed', default=123)
 parser.add_argument('--gpuid', default=0, type=int)
 parser.add_argument('--num_class', default=2, type=int)                                                # num classes
@@ -468,7 +470,7 @@ class NegEntropy(object):
         return torch.mean(torch.sum(probs.log() * probs, dim=1))
 
 def create_model():
-    model = DualNet(args.num_class)
+    model = DualNet(args.model_name, args.num_class)
     model = model.to(DEVICE)
     return model
 
@@ -500,7 +502,11 @@ CE = nn.CrossEntropyLoss(reduction='none')
 CEloss = nn.CrossEntropyLoss()
 CEsoft = CE_Soft_Label()
 eval_loader, noise_or_not = loader.run('eval_train')
-test_loader = loader.run('test')
+
+# Testing is optional
+if args.validation:
+    test_loader = loader.run('test')
+
 
 all_loss = [[], []]  
 
@@ -524,5 +530,6 @@ for epoch in range(args.num_epochs + 1):
         pred1 = (prob1 > args.p_threshold)
         total_trainloader, noisy_labels = loader.run('train', pred1, prob1, prob2)  # co-divide
         pi1,pi2,pi1_unrel,pi2_unrel = train(epoch,dualnet.net1, dualnet.net2, optimizer1, total_trainloader,pi1,pi2,pi1_unrel,pi2_unrel) 
-    test(epoch, dualnet.net1, dualnet.net2)
+    if args.validation:
+        test(epoch, dualnet.net1, dualnet.net2)
     torch.save(dualnet, f"./{args.dataset}_{args.noise_type}best.pth.tar")

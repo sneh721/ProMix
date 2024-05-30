@@ -50,7 +50,33 @@ class cifarn_dataset(Dataset):
             for _, label in self.train_dataset:
                 self.train_label.append(label)
 
-            if self.noise_mode == 'custom':      # Branch for data already is noisy
+            # if noise_type is not None:
+            if os.path.exists(noise_file):                          # Dataset which has known noise
+                noise_label = json.load(open(noise_file,"r"))
+                self.train_noisy_labels = noise_label
+                self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_label)
+            elif self.noise_mode=='sym' or self.noise_mode =='asym':       # inject noise  - artificial noise added to clean dataset
+                    noise_label = []
+                    idx = list(range(50000))
+                    random.shuffle(idx)
+                    num_noise = int(self.r*50000)            
+                    noise_idx = idx[:num_noise]
+                    for i in range(50000):
+                        if i in noise_idx:
+                            if self.noise_mode=='sym':
+                                noiselabel = random.randint(0, NUM_CLASSES - 1)
+                                noise_label.append(noiselabel)
+                            elif self.noise_mode=='asym':   
+                                noiselabel = self.transition[self.train_label[i]]
+                                noise_label.append(noiselabel)                    
+                        else:    
+                            noise_label.append(self.train_label[i])   
+                    self.train_noisy_labels = noise_label
+                    self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_labels)
+                    print("save noisy labels to %s ..."%noise_file)        
+                    json.dump(noise_label,open(noise_file,"w"))
+            
+            elif self.noise_mode == 'custom':      # Branch for data already is noisy, but unkown  (Actual Data)
                     if noise_type != 'clean':
                         self.train_noisy_labels = self.train_label
                     
