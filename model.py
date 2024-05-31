@@ -10,20 +10,6 @@ from copy import deepcopy
 
 FEAT_DIM = 128
 
-# class DualNet(nn.Module):
-#     # NOTE: model_name is unused in original DualNet, required for custom DualNet
-#     def __init__(self, model_name, num_class):
-#         super().__init__()
-#         self.net1 = ResNet18(num_classes=num_class)
-#         self.net2 = ResNet18(num_classes=num_class)
-
-#     def forward(self,x):
-#         outputs_1 = self.net1(x)
-#         outputs_2 = self.net2(x)
-#         outputs_mean = (outputs_1 + outputs_2)/2
-#         return outputs_mean
-
-###########################################################
 
 class DualNet(nn.Module):
     def __init__(self, model_name, num_class):
@@ -61,7 +47,7 @@ class CustomModel(nn.Module):
         
     def forward(self, x, train=False, use_ph=False):
         if train:
-            out = self.model.forward_features(x)[-1]
+            out = self.model.forward_features(x)
             out_linear = self.model.head(out)
             feat_c = self.train_head(out)
             if use_ph:
@@ -70,10 +56,10 @@ class CustomModel(nn.Module):
             else:
                 return out_linear, F.normalize(feat_c, dim=1)
         else:
-            out_linear = self.model(x)
+            out = self.model.forward_features(x)
+            out_linear = self.model.head(out)
             if use_ph:
-                # SOMETHING IS WRONG WITH THIS LINE -- Dimension mistmatch
-                out_linear_debias = self.ph_head(out_linear)
+                out_linear_debias = self.ph_head(out)
                 return out_linear, out_linear_debias
             else:
                 return out_linear
@@ -88,10 +74,9 @@ class CustomModel(nn.Module):
             param.requires_grad = False
         for param in self.model.head.parameters():
             param.requires_grad = True
-    
+        
     
 def test_custom_model():
-    # Example usage
     model_name = 'convnext_nano'  # Example TIMM model
     num_classes = 10         # Example number of output classes
     custom_model = CustomModel(model_name, num_classes)
@@ -100,7 +85,7 @@ def test_custom_model():
         print(f'{name}: requires_grad={param.requires_grad}')
         
     # Create a dummy input tensor
-    batch_size = 1
+    batch_size = 16
     num_channels = 3
     height = 224
     width = 224
@@ -109,11 +94,24 @@ def test_custom_model():
     # Forward pass with the dummy input
     custom_model.eval()  # Set model to evaluation mode
     with torch.no_grad():
-        output = custom_model(dummy_input, train=False, use_ph=False)        
-    
-    # Check the output
-    print("Output:", output)
-    print("Output Shape:", output.shape)
+        out, norm = custom_model(dummy_input, train=True, use_ph=False)  
+        print(out.shape)
+        print(norm.shape) 
+        
+    with torch.no_grad():
+        out, out_debias, norm = custom_model(dummy_input, train=True, use_ph=True) 
+        print(out.shape)
+        print(out_debias.shape)
+        print(norm.shape) 
+        
+    with torch.no_grad():
+        out = custom_model(dummy_input, train=False, use_ph=False) 
+        print(out.shape)
+        
+    with torch.no_grad():
+        out, out_debias = custom_model(dummy_input, train=False, use_ph=True)
+        print(out.shape)
+        print(out_debias.shape)
 
     print("Feature Extractor Output Shape:", custom_model.train_head.fc.out_features)
     print("Feature Extractor Input Shape:", custom_model.train_head.fc.in_features)
@@ -124,7 +122,8 @@ def test_custom_model():
 
 
 def main():
-    test_custom_model()
+    # test_custom_model()
+    pass
     
     
 if __name__ == "__main__":
