@@ -72,7 +72,7 @@ class cifarn_dataset(Dataset):
                         else:    
                             noise_label.append(self.train_label[i])   
                     self.train_noisy_labels = noise_label
-                    self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_labels)
+                    self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_label)
                     print("save noisy labels to %s ..."%noise_file)        
                     json.dump(noise_label,open(noise_file,"w"))
             
@@ -132,7 +132,7 @@ class cifarn_dataset(Dataset):
             return img1, img2
         elif self.mode == 'all_lab':
             img, target, prob, prob2 = self.train_dataset[index][0], self.noise_label[index], self.probability[index],self.probability2[index]
-            true_labels = self.train_labels[index]
+            true_labels = self.train_label[index]
             img1 = self.transform(img)
             img2 = self.transform_s(img)
             return img1, img2, target, prob,prob2,true_labels, index

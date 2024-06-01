@@ -16,4 +16,5 @@
 /Images/
 /utils/__pycache__/
 /cifar100png/
-cifar-100*
+/cifar10png/
+cifar-10*
