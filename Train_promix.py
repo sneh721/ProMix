@@ -21,7 +21,7 @@ parser.add_argument('--validation', action='store_true', default=False)
 parser.add_argument('--model_name', default=None, type=str)
 parser.add_argument('--batch_size', default=16, type=int, help='train batchsize')                      # batch size was 256
 parser.add_argument('--lr', '--learning_rate', default=0.05, type=float, help='initial learning rate')
-parser.add_argument('-lr_decay_rate', type=float, default=0.1, help='decay rate for learning rate')
+parser.add_argument('--lr_decay_rate', type=float, default=0.1, help='decay rate for learning rate')
 parser.add_argument('--cosine', action='store_true', default=False,
                     help='use cosine lr schedule')
 parser.add_argument('--noise_type', type=str, help='clean, aggre, worst, rand1, rand2, rand3, clean100, noisy100',
@@ -128,6 +128,12 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
     num_iter = (len(labeled_trainloader.dataset) // args.batch_size) + 1
     
     for batch_idx, (inputs_x, inputs_x2, labels_x, w_x, w_x2, true_labels, index) in enumerate(labeled_trainloader):
+        steps_per_epoch = (len(labeled_trainloader.dataset) / labeled_trainloader.batch_size)
+        total_iterations = args.num_epochs * steps_per_epoch
+        iteration = epoch * steps_per_epoch + batch_idx
+        pretrain_iterations = args.pretrain_ep * steps_per_epoch
+        adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations)
+        
         batch_size = inputs_x.size(0)
 
         # Transform label to one-hot
@@ -349,6 +355,12 @@ def warmup(epoch, net, net2, optimizer, dataloader):
     num_iter = (len(dataloader.dataset) // dataloader.batch_size) + 1
 
     for batch_idx, (inputs_w, inputs_s, labels, _) in enumerate(dataloader):
+        steps_per_epoch = (len(dataloader.dataset) / dataloader.batch_size)
+        total_iterations = args.num_epochs * steps_per_epoch
+        iteration = epoch * steps_per_epoch + batch_idx
+        pretrain_iterations = args.pretrain_ep * steps_per_epoch
+        adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations)
+        
         inputs_w, inputs_s, labels = inputs_w.to(DEVICE), inputs_s.to(DEVICE), labels.to(DEVICE)
         optimizer.zero_grad()
         outputs = net(inputs_w)
@@ -518,8 +530,7 @@ pi1_unrel = bias_initial(args.num_class)
 pi2_unrel = bias_initial(args.num_class)
 
 for epoch in range(args.num_epochs + 1):
-    adjust_learning_rate(args, optimizer1, epoch)
-    if epoch < warm_up:
+    if epoch < warm_up:                 # This is pre_train???
         warmup_trainloader, noisy_labels = loader.run('warmup')
         print('Warmup Net1')
         warmup(epoch, dualnet.net1, dualnet.net2, optimizer1, warmup_trainloader)

@@ -75,16 +75,23 @@ def linear_rampup2(current, rampup_length):
         return 1.0
     else:
         return current / rampup_length
-
-def adjust_learning_rate(args, optimizer, epoch):
+        
+# Adjusted scheduler to update every iteration instead of every epoch
+def adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations):
     lr = args.lr
-    if args.cosine:
+    pretrain_epochs = args.pretrain_ep
+
+    # Warmup phase: increasing lr
+    if epoch < pretrain_epochs:
+        lr = lr * (iteration / pretrain_iterations)
+    else:  # Training phase: decreasing lr
+        iteration -= pretrain_iterations
+        total_iterations -= pretrain_iterations
         eta_min = lr * (args.lr_decay_rate ** 3)
-        lr = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * epoch / args.num_epochs)) / 2
-    else:
-        steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
-        if steps > 0:
-            lr = lr * (args.lr_decay_rate ** steps)
+        lr = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * iteration / total_iterations)) / 2
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+        
+        
+        

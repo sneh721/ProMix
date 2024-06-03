@@ -3,4 +3,7 @@
 # Try pretrain epochs 0
 
 
-python Train_promix.py --lr 0.05 --validation --model_name convnext_nano --cosine --dataset custom --num_class 100 --rho_range 0.7,0.7 --tau 0.95 --pretrain_ep 0 --warmup_ep 1 --num_epochs 1 --debias_output 0.5 --debias_pl 0.5  --noise_mode sym --noise_rate 0.2
+python Train_promix.py --lr 0.05 --validation --model_name convnext_nano --cosine --dataset custom --num_class 100 --rho_range 0.7,0.7 --tau 0.95 --pretrain_ep 2 --warmup_ep 1 --num_epochs 10 --debias_output 0.5 --debias_pl 0.5  --noise_mode sym --noise_rate 0.2
+# NOTE: naming is very confusing
+# pretrain_ep = warmup epochs
+# warmup_ep = parameter rampup
