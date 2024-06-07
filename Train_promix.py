@@ -129,7 +129,7 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
     
     for batch_idx, (inputs_x, inputs_x2, labels_x, w_x, w_x2, true_labels, index) in enumerate(labeled_trainloader):
         steps_per_epoch = (len(labeled_trainloader.dataset) / labeled_trainloader.batch_size)
-        total_iterations = args.num_epochs * steps_per_epoch
+        total_iterations = (args.num_epochs + 1) * steps_per_epoch
         iteration = epoch * steps_per_epoch + batch_idx
         pretrain_iterations = args.pretrain_ep * steps_per_epoch
         adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations)
@@ -356,7 +356,7 @@ def warmup(epoch, net, net2, optimizer, dataloader):
 
     for batch_idx, (inputs_w, inputs_s, labels, _) in enumerate(dataloader):
         steps_per_epoch = (len(dataloader.dataset) / dataloader.batch_size)
-        total_iterations = args.num_epochs * steps_per_epoch
+        total_iterations = (args.num_epochs + 1) * steps_per_epoch
         iteration = epoch * steps_per_epoch + batch_idx
         pretrain_iterations = args.pretrain_ep * steps_per_epoch
         adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations)
@@ -530,7 +530,7 @@ pi1_unrel = bias_initial(args.num_class)
 pi2_unrel = bias_initial(args.num_class)
 
 for epoch in range(args.num_epochs + 1):
-    if epoch < warm_up:                 # This is pre_train???
+    if epoch < warm_up:                 # This is Warmup
         warmup_trainloader, noisy_labels = loader.run('warmup')
         print('Warmup Net1')
         warmup(epoch, dualnet.net1, dualnet.net2, optimizer1, warmup_trainloader)
