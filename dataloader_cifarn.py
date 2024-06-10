@@ -84,10 +84,10 @@ class cifarn_dataset(Dataset):
                             idx_each_class_noisy[self.train_noisy_labels[i]].append(i)
                         class_size_noisy = [len(idx_each_class_noisy[i]) for i in range(self.nb_classes)]
                         self.noise_prior = np.array(class_size_noisy) / sum(class_size_noisy)
-                        self.print_wrapper(f'The noisy data ratio in each class is {self.noise_prior}')
+                        # self.print_wrapper(f'The noisy data ratio in each class is {self.noise_prior}')
                         self.noise_or_not = np.transpose(self.train_noisy_labels) != np.transpose(self.train_label)
                         self.actual_noise_rate = np.sum(self.noise_or_not) / len(self.noise_or_not)
-                        self.print_wrapper('over all noise rate is ', self.actual_noise_rate)
+                        # self.print_wrapper('over all noise rate is ', self.actual_noise_rate)
                     noise_label = self.train_noisy_labels
                 
             

@@ -345,6 +345,10 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
             print('%s:%s | Epoch [%3d/%3d] Iter[%3d/%3d]\t Net1 loss: %.2f  Net2 loss: %.2f'
                          % (args.dataset, args.noise_type, epoch, args.num_epochs, batch_idx + 1, num_iter,
                             loss_net1.item(), loss_net2.item()))
+            if args.validation:
+                test(epoch, batch_idx + 1, num_iter, net, net2)
+                net.train()
+                net2.train()
 
     return pi1,pi2,pi1_unrel,pi2_unrel
 
@@ -380,6 +384,10 @@ def warmup(epoch, net, net2, optimizer, dataloader):
             print('%s:%s | Epoch [%3d/%3d] Iter[%3d/%3d]\t CE-loss: %.4f  Penalty-loss: %.4f  All-loss: %.4f'
                          % (
                          args.dataset, args.noise_type, epoch, args.num_epochs, batch_idx + 1, num_iter,loss.item(),penalty.item(), L.item()))
+            if args.validation:
+                test(epoch, batch_idx + 1, num_iter, net, net2)
+                net.train()
+                net2.train()
 
 def evaluate(loader, model, save = False, best_acc = 0.0):
     model.eval()    # Change model to 'eval' mode.
@@ -406,7 +414,7 @@ def evaluate(loader, model, save = False, best_acc = 0.0):
             print(f'model saved to {save_path}!')
     return acc
 
-def test(epoch, net1, net2):
+def test(epoch, iter, num_iters, net1, net2, end_epoch=False):
     net1.eval()
     net2.eval()
     correct = 0
@@ -431,9 +439,11 @@ def test(epoch, net1, net2):
     acc = 100. * correct / total
     acc2 = 100. * correct2 / total
     accmean_ori = 100. * correctmean_ori / total
-    print("| Test Epoch #%d\t Acc Net1: %.2f%%, Acc Net2: %.2f%% Acc Mean: %.2f%%\n" % (epoch, acc, acc2,  accmean_ori))
-    test_log.write('Epoch:%d   Accuracy:%.2f\n' % (epoch, acc))
-    test_log.flush()
+    if end_epoch:
+        print("| Test Epoch #%d\t Acc Net1: %.2f%%, Acc Net2: %.2f%% Acc Mean: %.2f%%\n" % (epoch, acc, acc2,  accmean_ori))
+    else:
+        test_log.write('Epoch:%d/%d   Iter:%d/%d   Accuracy:%.2f\n' % (epoch, args.num_epochs, iter, num_iters, accmean_ori))
+        test_log.flush()
 
 
 def eval_train(model, all_loss, rho, num_class):
@@ -542,5 +552,5 @@ for epoch in range(args.num_epochs + 1):
         total_trainloader, noisy_labels = loader.run('train', pred1, prob1, prob2)  # co-divide
         pi1,pi2,pi1_unrel,pi2_unrel = train(epoch,dualnet.net1, dualnet.net2, optimizer1, total_trainloader,pi1,pi2,pi1_unrel,pi2_unrel) 
     if args.validation:
-        test(epoch, dualnet.net1, dualnet.net2)
+        test(epoch, 0, 0, dualnet.net1, dualnet.net2, True)
     torch.save(dualnet, f"./{args.dataset}_{args.noise_type}best.pth.tar")

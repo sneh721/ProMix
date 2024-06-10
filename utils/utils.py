@@ -89,9 +89,6 @@ def adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pr
         total_iterations -= pretrain_iterations
         eta_min = lr * (args.lr_decay_rate ** 3)
         lr = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * iteration / total_iterations)) / 2
-        
-    if iteration % 100 == 0:
-        print(lr)
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
