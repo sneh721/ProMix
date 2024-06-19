@@ -542,6 +542,8 @@ pi2 = bias_initial(args.num_class)
 pi1_unrel = bias_initial(args.num_class)
 pi2_unrel = bias_initial(args.num_class)
 
+
+
 for epoch in range(args.num_epochs + 1):
     if epoch < warm_up:                 # This is Warmup
         warmup_trainloader, noisy_labels = loader.run('warmup')

@@ -59,7 +59,7 @@ class cifarn_dataset(Dataset):
                     for i in range(50000):
                         if i in noise_idx:
                             if self.noise_mode=='sym':
-                                noiselabel = random.randint(0, NUM_CLASSES - 1)
+                                noiselabel = random.randint(0, self.nb_classes - 1)
                                 noise_label.append(noiselabel)
                             elif self.noise_mode=='asym':   
                                 noiselabel = self.transition[self.train_label[i]]
@@ -93,7 +93,7 @@ class cifarn_dataset(Dataset):
             elif self.mode == 'all':     # fully labeled data without probability information
                 self.noise_label = noise_label
             else:
-                if self.mode == "labeled":     
+                if self.mode == 'labeled':
                     # Data labeled by predictions (pseudo labeled): using the probability distribution of the predictions of data
                     # Then checks the cleanness of the pseudo label
                     pred_idx = pred.nonzero()[0]
