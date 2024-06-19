@@ -460,9 +460,12 @@ def eval_train(model, all_loss, rho, num_class):
             num_class = outputs.shape[1]
             loss = CE(outputs, targets)
             targets_cpu = targets.cpu()
-            for b in range(inputs.size(0)):
-                losses[index[b]] = loss[b]
-                targets_list[index[b]] = targets_cpu[b]
+            # for b in range(inputs.size(0)):
+            #     losses[index[b]] = loss[b]
+            #     targets_list[index[b]] = targets_cpu[b]
+                
+            losses[index] = loss
+            targets_list[index] = targets_cpu
                 
     #class-wise small-loss selection (CSS for base selection set)
     losses = (losses - losses.min()) / (losses.max() - losses.min())
@@ -505,7 +508,7 @@ warm_up = args.pretrain_ep
 time = str(datetime.now())[-6:]
 loader = dataloader.cifarn_dataloader(args.dataset, noise_type=args.noise_type, noise_path=args.noise_path,
                                       is_human=args.is_human, batch_size=args.batch_size, num_workers=8, \
-                                      root_dir=args.data_path, log=stats_log,
+                                      root_dir=args.data_path, log=stats_log, num_classes=args.num_class,
                                       noise_file='%s/noise_file/%s_%s.json' % (args.data_path,args.noise_type,time),r = args.noise_rate , noise_mode = args.noise_mode)
 
 print('| Building net')
