@@ -15,11 +15,14 @@ from utils.utils import *
 from utils.fmix import *
 from sklearn.mixture import GaussianMixture
 from datetime import datetime
+import itertools
+
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
 parser.add_argument('--validation', action='store_true', default=False)
 parser.add_argument('--model_name', default=None, type=str)
 parser.add_argument('--batch_size', default=16, type=int, help='train batchsize')                      # batch size was 256
+parser.add_argument('--percent_per_epoch', default=0.02, type=float, help='percent of data processed per epoch')  # Artificially decrease epoch size
 parser.add_argument('--lr', '--learning_rate', default=0.05, type=float, help='initial learning rate')
 parser.add_argument('--lr_decay_rate', type=float, default=0.1, help='decay rate for learning rate')
 parser.add_argument('--cosine', action='store_true', default=False,
@@ -42,6 +45,7 @@ parser.add_argument('--tau', default=0.99, type=float,
                     help='high-confidence selection threshold')
 parser.add_argument('--pretrain_ep', default=10, type=int, help = 'warm-up training epoch')
 parser.add_argument('--warmup_ep', default=50, type=int, help = 'parameter ramp-up epoch')
+parser.add_argument('--warmup_percent', default=0.2, type=float, help = 'proportion of epoch we are warming up')
 parser.add_argument('--low_conf_del', action='store_true', default=False)
 parser.add_argument('--threshold', default=0.9, type=float, help = 'threshold of label guessing')
 parser.add_argument('--fmix', action='store_true', default=False)
@@ -114,7 +118,7 @@ def label_guessing(idx_chosen, w_x, batch_size, score1, score2, match):
     return w_x2
 
 # Training
-def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel, pi2_unrel):
+def train(epoch, total_batches, curr_batch, start, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel, pi2_unrel):
     net.train()
     net2.train()  # train two peer networks in parallel
     
@@ -127,12 +131,27 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
     beta = 0.1 * linear_rampup2(epoch, 2*args.warmup_ep) if debias_beta_pl else 1
     num_iter = (len(labeled_trainloader.dataset) // args.batch_size) + 1
     
-    for batch_idx, (inputs_x, inputs_x2, labels_x, w_x, w_x2, true_labels, index) in enumerate(labeled_trainloader):
-        steps_per_epoch = (len(labeled_trainloader.dataset) / labeled_trainloader.batch_size)
-        total_iterations = (args.num_epochs + 1) * steps_per_epoch
-        iteration = epoch * steps_per_epoch + batch_idx
-        pretrain_iterations = args.pretrain_ep * steps_per_epoch
-        adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations)
+    
+    batches_per_epoch = len(labeled_trainloader)
+    warmup_batches = args.warmup_percent * args.num_epochs * batches_per_epoch
+    stop = min(start + math.ceil(batches_per_epoch * args.percent_per_epoch), len(labeled_trainloader))
+    
+    for batch_idx, batch in enumerate(itertools.islice(labeled_trainloader, start, stop), start):
+        # inputs_x, inputs_x2, labels_x, w_x, w_x2, true_labels, index = batch     
+        
+        inputs_x, inputs_x2, labels_x, _ = batch
+        
+        start_idx = batch_idx * args.batch_size
+        stop_idx = min(start_idx + args.batch_size, stop * args.batch_size)
+        
+        w_x = labeled_trainloader.probability[start_idx:stop_idx]
+        w_x2 = labeled_trainloader.probability2[start_idx:stop_idx]
+        
+        w_x = torch.tensor(w_x)
+        w_x2 = torch.tensor(w_x2)
+           
+        adjust_learning_rate(args, optimizer, curr_batch, warmup_batches, total_batches)
+        curr_batch += 1
         
         batch_size = inputs_x.size(0)
 
@@ -345,6 +364,8 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
             print('%s:%s | Epoch [%3d/%3d] Iter[%3d/%3d]\t Net1 loss: %.2f  Net2 loss: %.2f'
                          % (args.dataset, args.noise_type, epoch, args.num_epochs, batch_idx + 1, num_iter,
                             loss_net1.item(), loss_net2.item()))
+            test_log.write('Epoch:%d/%d   Iter:%d/%d   Net1 loss: %.2f  Net2 loss: %.2f\n' % (epoch, args.num_epochs, batch_idx + 1, num_iter, loss_net1.item(), loss_net2.item()))
+            test_log.flush()
             if args.validation:
                 test(epoch, batch_idx + 1, num_iter, net, net2)
                 net.train()
@@ -353,17 +374,20 @@ def train(epoch, net, net2, optimizer, labeled_trainloader, pi1, pi2, pi1_unrel,
     return pi1,pi2,pi1_unrel,pi2_unrel
 
 
-def warmup(epoch, net, net2, optimizer, dataloader):
+def warmup(epoch, total_batches, curr_batch, start, net, net2, optimizer, dataloader):
     net.train()
     net2.train()
     num_iter = (len(dataloader.dataset) // dataloader.batch_size) + 1
-
-    for batch_idx, (inputs_w, inputs_s, labels, _) in enumerate(dataloader):
-        steps_per_epoch = (len(dataloader.dataset) / dataloader.batch_size)
-        total_iterations = (args.num_epochs + 1) * steps_per_epoch
-        iteration = epoch * steps_per_epoch + batch_idx
-        pretrain_iterations = args.pretrain_ep * steps_per_epoch
-        adjust_learning_rate(args, optimizer, iteration, total_iterations, epoch, pretrain_iterations)
+    
+    batches_per_epoch = len(dataloader)
+    warmup_batches = args.warmup_percent * args.num_epochs * batches_per_epoch
+    stop = min(start + math.ceil(batches_per_epoch * args.percent_per_epoch), len(dataloader))
+    
+    for batch_idx, batch in enumerate(itertools.islice(dataloader, start, stop), start):
+        (inputs_w, inputs_s, labels, _) = batch
+        
+        adjust_learning_rate(args, optimizer, curr_batch, warmup_batches, total_batches)
+        curr_batch += 1
         
         inputs_w, inputs_s, labels = inputs_w.to(DEVICE), inputs_s.to(DEVICE), labels.to(DEVICE)
         optimizer.zero_grad()
@@ -383,7 +407,9 @@ def warmup(epoch, net, net2, optimizer, dataloader):
         if batch_idx % 100 == 0:
             print('%s:%s | Epoch [%3d/%3d] Iter[%3d/%3d]\t CE-loss: %.4f  Penalty-loss: %.4f  All-loss: %.4f'
                          % (
-                         args.dataset, args.noise_type, epoch, args.num_epochs, batch_idx + 1, num_iter,loss.item(),penalty.item(), L.item()))
+                         args.dataset, args.noise_type, epoch, args.num_epochs, batch_idx + 1, num_iter, loss.item(),penalty.item(), L.item()))
+            test_log.write('Epoch:%d/%d   Iter:%d/%d   CE-loss: %.4f   Penalty-loss: %.4f   All-loss: %.4f\n' % (epoch, args.num_epochs, batch_idx + 1, num_iter,  loss.item(), penalty.item(), L.item()))
+            test_log.flush()
             if args.validation:
                 test(epoch, batch_idx + 1, num_iter, net, net2)
                 net.train()
@@ -459,11 +485,13 @@ def eval_train(model, all_loss, rho, num_class):
             outputs = model(inputs)
             num_class = outputs.shape[1]
             loss = CE(outputs, targets)
-            targets_cpu = targets.cpu()
+            targets_cpu = targets.float().cpu()
+            
             # for b in range(inputs.size(0)):
             #     losses[index[b]] = loss[b]
             #     targets_list[index[b]] = targets_cpu[b]
                 
+            index = index.to(torch.long)
             losses[index] = loss
             targets_list[index] = targets_cpu
                 
@@ -542,20 +570,32 @@ pi2 = bias_initial(args.num_class)
 pi1_unrel = bias_initial(args.num_class)
 pi2_unrel = bias_initial(args.num_class)
 
+# dataloader -- warmup and training
+# go by index of the dataloader -- len(dataloader) -- how many batches are 2% of the data
+warmup_dataloader, noisy_labels = loader.run('warmup')
+batches_per_epoch = len(warmup_dataloader)
+total_batches = args.num_epochs * batches_per_epoch
 
 
-for epoch in range(args.num_epochs + 1):
-    if epoch < warm_up:                 # This is Warmup
-        warmup_trainloader, noisy_labels = loader.run('warmup')
-        print('Warmup Net1')
-        warmup(epoch, dualnet.net1, dualnet.net2, optimizer1, warmup_trainloader)
-    else:
-        rho = args.rho_start + (args.rho_end - args.rho_start) * linear_rampup2(epoch, args.warmup_ep)
-        prob1, all_loss[0] = eval_train(dualnet.net1, all_loss[0], rho, args.num_class)
-        prob2, all_loss[0] = eval_train(dualnet.net2, all_loss[0], rho, args.num_class)
-        pred1 = (prob1 > args.p_threshold)
-        total_trainloader, noisy_labels = loader.run('train', pred1, prob1, prob2)  # co-divide
-        pi1,pi2,pi1_unrel,pi2_unrel = train(epoch,dualnet.net1, dualnet.net2, optimizer1, total_trainloader,pi1,pi2,pi1_unrel,pi2_unrel) 
-    if args.validation:
-        test(epoch, 0, 0, dualnet.net1, dualnet.net2, True)
-    torch.save(dualnet, f"./{args.dataset}_{args.noise_type}best.pth.tar")
+# NOTE: epoch = percent per epoch % of the total data
+for epoch in range(args.num_epochs):
+    step_size = int(batches_per_epoch * args.percent_per_epoch)
+    for start in range(0, batches_per_epoch, step_size):
+        curr_batch = epoch * batches_per_epoch + start
+        if curr_batch < args.warmup_percent * total_batches:                 # This is Warmup
+            print('Warmup Net1')
+            warmup(epoch, total_batches, curr_batch, start, dualnet.net1, dualnet.net2, optimizer1, warmup_dataloader)
+        else:
+            rho = args.rho_start + (args.rho_end - args.rho_start) * linear_rampup2(epoch, args.warmup_ep)
+            prob1, all_loss[0] = eval_train(dualnet.net1, all_loss[0], rho, args.num_class)
+            prob2, all_loss[0] = eval_train(dualnet.net2, all_loss[0], rho, args.num_class)
+            pred1 = (prob1 > args.p_threshold)
+            
+            warmup_dataloader.probability = prob1
+            warmup_dataloader.probability2 = prob2
+            pi1,pi2,pi1_unrel,pi2_unrel = train(epoch, total_batches, curr_batch, start, dualnet.net1, dualnet.net2,
+                                                optimizer1, warmup_dataloader,pi1,pi2,pi1_unrel,pi2_unrel) 
+            
+        if args.validation:
+            test(epoch, 0, 0, dualnet.net1, dualnet.net2, True)
+        torch.save(dualnet, f"./{args.dataset}_{args.noise_type}best.pth.tar")
